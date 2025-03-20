@@ -10,10 +10,10 @@ import Icon from 'react-native-vector-icons/Feather';
 import { useNavigation, useRoute } from '@react-navigation/native';
 
 const navigationItems = [
-  { id: 'home', icon: 'home', label: 'Home', screen: 'Home' },
-  { id: 'work', icon: 'calendar', label: 'Projects', screen: 'Proyectos' },
-  { id: 'notifications', icon: 'bell', label: 'Notifications', screen: 'Notificaciones' },
-  { id: 'profile', icon: 'user', label: 'Profile', screen: 'Home' },
+  { id: 'home', icon: 'home', label: 'Inicio', screen: 'Home' },
+  { id: 'work', icon: 'calendar', label: 'Archivados', screen: 'Proyectos' },
+  { id: 'notifications', icon: 'bell', label: 'Notificaciones', screen: 'Notificaciones' },
+  { id: 'profile', icon: 'user', label: 'Perfil', screen: 'Home' },
 ];
 
 const BottomNav = () => {

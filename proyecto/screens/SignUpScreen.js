@@ -13,7 +13,7 @@ export default function SignupScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
 
   const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
-    clientId: "830529089599-uiu2b2m55cfismiagnvo17kdts8c8b91.apps.googleusercontent.com"
+    clientId: "830529089599-3gc714c6p6qvcq3po5qvcfa0okl76js6.apps.googleusercontent.com"
   });
 
   const handleSignup = async () => {

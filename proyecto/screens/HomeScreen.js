@@ -51,7 +51,7 @@ export default function HomeScreen({ navigation }) {
       !nuevoProyecto.cliente.trim() ||
       !nuevoProyecto.descripcion.trim()
     ) {
-      alert("Por favor complete todos los campos para crear el proyecto.")
+      alert("Es necesario rellenar los campos.")
       return
     }
 

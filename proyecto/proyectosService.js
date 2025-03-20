@@ -9,7 +9,8 @@ import {
   query, 
   where 
 } from "firebase/firestore";
-import { auth, db } from "../proyecto/firebaseConfig";
+import { auth, db, storage} from "../proyecto/firebaseConfig";
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const PROYECTOS_COLLECTION = "proyectos";
 const MIEMBROS_COLLECTION = "miembros_proyecto";
@@ -474,6 +475,54 @@ export const obtenerEstadisticasTareas = async (proyectoId) => {
     };
   } catch (error) {
     console.error("Error al obtener estadísticas:", error);
+    throw error;
+  }
+};
+
+export const actualizarTarea = async (proyectoId, tarea) => {
+  try {
+    const tareaRef = doc(db, TAREAS_COLLECTION, tarea.id);
+    
+    // Creamos un objeto con los campos a actualizar
+    const datosActualizados = {
+      estado: tarea.estado,
+      comentarioFinalizacion: tarea.comentarioFinalizacion,
+      fechaFinalizacion: tarea.fechaFinalizacion
+    };
+    
+    // Si hay una URL de imagen, la incluimos en la actualización
+    if (tarea.evidenciaImagen) {
+      datosActualizados.evidenciaImagen = tarea.evidenciaImagen;
+    }
+    
+    await updateDoc(tareaRef, datosActualizados);
+    return true;
+  } catch (error) {
+    console.error("Error al actualizar tarea:", error);
+    throw error;
+  }
+};
+
+// Subir imagen a Firebase Storage
+export const subirImagenEvidencia = async (proyectoId, tareaId, uri) => {
+  try {
+    // Convertir URI a blob
+    const response = await fetch(uri);
+    const blob = await response.blob();
+    
+    // Crear referencia en Firebase Storage
+    const nombreArchivo = `evidencias/${proyectoId}/${tareaId}_${Date.now()}.jpg`;
+    const storageRef = ref(storage, nombreArchivo);
+    
+    // Subir imagen
+    await uploadBytes(storageRef, blob);
+    
+    // Obtener URL de descarga
+    const downloadURL = await getDownloadURL(storageRef);
+    
+    return downloadURL;
+  } catch (error) {
+    console.error("Error al subir imagen:", error);
     throw error;
   }
 };

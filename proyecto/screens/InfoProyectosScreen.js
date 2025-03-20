@@ -44,7 +44,7 @@ export default function InfoProyectosScreen({ route, navigation }) {
     titulo: "",
     descripcion: "",
     asignadoA: "",
-    asignadoANombre: "", // Nuevo campo para mostrar el nombre del asignado
+    asignadoANombre: "",
     fechaVencimiento: "",
     prioridad: "media",
     estado: "Pendiente",
@@ -145,7 +145,7 @@ export default function InfoProyectosScreen({ route, navigation }) {
   const handleCrearTarea = async () => {
     try {
       if (!nuevaTarea.titulo || !nuevaTarea.asignadoA || !nuevaTarea.fechaVencimiento || !nuevaTarea.prioridad) {
-        Alert.alert("Error", "Por favor completa todos los campos requeridos");
+        Alert.alert("Error", "Completa todos los campos requeridos");
         return;
       }
 
