@@ -6,16 +6,21 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
+  Alert,
+  StatusBar
 } from 'react-native';
 import { auth } from '../firebaseConfig';
 import {
   obtenerNotificaciones,
   aceptarInvitacion,
   rechazarInvitacion,
+  marcarNotificacionLeida
 } from '../proyectosService';
 import BottomNav from '../assets/BottomNav';
+import { Feather } from '@expo/vector-icons';
+import styles from "../styles/notificacionesStyles"
 
-export default function NotificacionesScreen() {
+export default function NotificacionesScreen({ navigation }) {
   const [notificaciones, setNotificaciones] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -44,6 +49,7 @@ export default function NotificacionesScreen() {
       await cargarNotificaciones();
     } catch (error) {
       console.error('Error al aceptar invitación:', error);
+      Alert.alert('Error', 'No se pudo aceptar la invitación. Intenta nuevamente.');
     }
   };
 
@@ -53,6 +59,50 @@ export default function NotificacionesScreen() {
       await cargarNotificaciones();
     } catch (error) {
       console.error('Error al rechazar invitación:', error);
+      Alert.alert('Error', 'No se pudo rechazar la invitación. Intenta nuevamente.');
+    }
+  };
+
+  // Función para usar fecha DD-MM-YYYY
+  const formatearFecha = (fecha) => {
+    if (!fecha) return "";
+    const date = new Date(fecha);
+    const dia = date.getDate().toString().padStart(2, "0");
+    const mes = (date.getMonth() + 1).toString().padStart(2, "0");
+    const anio = date.getFullYear();
+    return `${dia}-${mes}-${anio}`;
+  };
+
+  // Función para navegar a la tarea
+  const navegarATarea = async (notificacion) => {
+    try {
+      // Solo intentar marcar como leída si es una notificación de cambio_fecha
+      if (notificacion.tipo === 'cambio_fecha' && !notificacion.leido) {
+        await marcarNotificacionLeida(notificacion.id);
+      }
+      
+      // Determinar el ID de la tarea según el tipo de notificación
+      let tareaId;
+      if (notificacion.tipo === 'tarea') {
+        // Para notificaciones de tipo tarea, el ID es el ID de la tarea directamente
+        tareaId = notificacion.id;
+      } else if (notificacion.tipo === 'cambio_fecha' && notificacion.datos && notificacion.datos.tareaId) {
+        // Para notificaciones de cambio de fecha, el ID de la tarea está en datos.tareaId
+        tareaId = notificacion.datos.tareaId;
+      } else {
+        throw new Error('No se pudo determinar el ID de la tarea');
+      }
+      
+      // Navegar a la pantalla de tareas al dar  click
+      navigation.navigate('ListaTareas', {
+        proyecto: notificacion.proyecto,
+        userRole: notificacion.rol || 'Empleado',
+        tareaId: tareaId,
+        abrirTarea: true 
+      });
+    } catch (error) {
+      console.error('Error al navegar a la tarea:', error);
+      Alert.alert('Error', 'No se pudo abrir la tarea. Intenta nuevamente.');
     }
   };
 
@@ -61,9 +111,12 @@ export default function NotificacionesScreen() {
       return (
         <View key={notificacion.id} style={styles.notificacionCard}>
           <View style={styles.notificacionHeader}>
-            <Text style={styles.notificacionTipo}>Invitación a Proyecto</Text>
+            <View style={styles.tipoContainer}>
+              <Feather name="mail" size={16} color="#1E5F74" style={styles.iconoTipo} />
+              <Text style={styles.notificacionTipo}>Invitación a Proyecto</Text>
+            </View>
             <Text style={styles.notificacionFecha}>
-              {new Date(notificacion.fechaInvitacion).toLocaleDateString()}
+              {formatearFecha(notificacion.fechaInvitacion)}
             </Text>
           </View>
           <Text style={styles.notificacionTitulo}>
@@ -71,37 +124,80 @@ export default function NotificacionesScreen() {
           </Text>
           <View style={styles.botonesContainer}>
             <TouchableOpacity
-              style={[styles.boton, styles.botonAceptar]}
-              onPress={() => handleAceptarInvitacion(notificacion.id)}
-            >
-              <Text style={styles.botonTexto}>Aceptar</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
               style={[styles.boton, styles.botonRechazar]}
               onPress={() => handleRechazarInvitacion(notificacion.id)}
             >
               <Text style={styles.botonTexto}>Rechazar</Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.boton, styles.botonAceptar]}
+              onPress={() => handleAceptarInvitacion(notificacion.id)}
+            >
+              <Text style={styles.botonTexto}>Aceptar</Text>
+            </TouchableOpacity>
           </View>
         </View>
       );
-    } else if (notificacion.tipo === 'tarea') {
+    } else if (notificacion.tipo === 'tarea' || notificacion.tipo === 'cambio_fecha') {
+      const esCambioFecha = notificacion.tipo === 'cambio_fecha';
+      
       return (
-        <View key={notificacion.id} style={styles.notificacionCard}>
+        <TouchableOpacity 
+          key={notificacion.id} 
+          style={[
+            styles.notificacionCard,
+            !notificacion.leido && styles.notificacionNoLeida
+          ]}
+          onPress={() => navegarATarea(notificacion)}
+        >
           <View style={styles.notificacionHeader}>
-            <Text style={styles.notificacionTipo}>Tarea Asignada</Text>
+            <View style={styles.tipoContainer}>
+              {esCambioFecha ? (
+                <Feather name="clock" size={16} color="#FF9800" style={styles.iconoTipo} />
+              ) : (
+                <Feather name="bell" size={16} color="#1E5F74" style={styles.iconoTipo} />
+              )}
+              <Text style={[
+                styles.notificacionTipo,
+                esCambioFecha && styles.cambioFechaTipo
+              ]}>
+                {esCambioFecha ? 'Cambio de Fecha' : 'Tarea Asignada'}
+              </Text>
+            </View>
             <Text style={styles.notificacionFecha}>
-              {new Date(notificacion.fechaCreacion).toLocaleDateString()}
+              {formatearFecha(notificacion.fechaCreacion || notificacion.fecha)}
             </Text>
           </View>
+          
           <Text style={styles.notificacionTitulo}>{notificacion.titulo}</Text>
-          <Text style={styles.notificacionProyecto}>
-            Proyecto: {notificacion.proyecto.nombre}
-          </Text>
-          <Text style={styles.notificacionEstado}>
-            Estado: {notificacion.estado}
-          </Text>
-        </View>
+          
+          {notificacion.mensaje && (
+            <Text style={styles.notificacionMensaje}>{notificacion.mensaje}</Text>
+          )}
+          
+          <View style={styles.notificacionDetalles}>
+            <View style={styles.detalleItem}>
+              <Feather name="briefcase" size={14} color="#1E5F74" />
+              <Text style={styles.notificacionProyecto}>
+                {notificacion.proyecto.nombre}
+              </Text>
+            </View>
+            
+            {!esCambioFecha && (
+              <View style={styles.detalleItem}>
+                <Feather name="flag" size={14} color="#1E5F74" />
+                <Text style={styles.notificacionEstado}>
+                  {notificacion.estado}
+                </Text>
+              </View>
+            )}
+          </View>
+          
+          <View style={styles.verMasContainer}>
+            <Text style={styles.verMasTexto}>Ver detalles</Text>
+            <Feather name="arrow-right" size={16} color="#1E5F74" />
+          </View>
+        </TouchableOpacity>
       );
     }
     return null;
@@ -109,107 +205,36 @@ export default function NotificacionesScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.titulo}>Notificaciones</Text>
-      <ScrollView
+      <StatusBar backgroundColor="#1E5F74" barStyle="light-content" />
+      
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Notificaciones</Text>
+      </View>
+      
+      <ScrollView showsVerticalScrollIndicator={false}
         style={styles.scrollView}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl 
+            refreshing={refreshing} 
+            onRefresh={onRefresh}
+            colors={["#1E5F74"]} 
+            tintColor="#1E5F74"
+          />
         }
         contentContainerStyle={styles.contentContainer}
       >
         {notificaciones.length > 0 ? (
           notificaciones.map(renderNotificacion)
         ) : (
-          <Text style={styles.noNotificaciones}>
-            No tienes notificaciones pendientes
-          </Text>
+          <View style={styles.emptyState}>
+            <Feather name="bell-off" size={50} color="#BBBBBB" />
+            <Text style={styles.noNotificaciones}>
+              No tienes notificaciones pendientes
+            </Text>
+          </View>
         )}
       </ScrollView>
       <BottomNav/>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF', // Blanco como fondo principal
-  },
-  titulo: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#171321', // Púrpura oscuro para el título
-    padding: 16,
-    paddingTop: 60,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  contentContainer: {
-    padding: 16,
-    paddingBottom: 100,
-  },
-  notificacionCard: {
-    backgroundColor: '#F2F2F2', // Gris claro para las tarjetas de notificación
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-  },
-  notificacionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  notificacionTipo: {
-    color: '#171321', // Púrpura oscuro para el tipo de notificación
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  notificacionFecha: {
-    color: '#666', // Gris medio para la fecha de notificación
-    fontSize: 12,
-  },
-  notificacionTitulo: {
-    color: '#171321', // Púrpura oscuro para el título de notificación
-    fontSize: 16,
-    fontWeight: '500',
-    marginBottom: 8,
-  },
-  notificacionProyecto: {
-    color: '#333', // Gris oscuro para el proyecto de notificación
-    fontSize: 14,
-    marginBottom: 4,
-  },
-  notificacionEstado: {
-    color: '#333', // Gris oscuro para el estado de notificación
-    fontSize: 14,
-  },
-  botonesContainer: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginTop: 12,
-    gap: 8,
-  },
-  boton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
-  botonAceptar: {
-    backgroundColor: '#171321', // Púrpura oscuro para el botón aceptar
-  },
-  botonRechazar: {
-    backgroundColor: '#4A4656', // Púrpura claro para el botón rechazar
-  },
-  botonTexto: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  noNotificaciones: {
-    color: '#666', // Gris medio para el texto de no notificaciones
-    textAlign: 'center',
-    marginTop: 32,
-    fontSize: 16,
-  },
-});

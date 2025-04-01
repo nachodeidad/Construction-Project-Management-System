@@ -1,10 +1,12 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput } from "react-native"
+import { View, Text, ScrollView, TouchableOpacity, Modal, TextInput, StatusBar } from "react-native"
 import { signOut } from "@firebase/auth"
 import { auth } from "../firebaseConfig"
 import BottomNav from "../assets/BottomNav"
 import { useEffect, useState } from "react"
 import { crearProyecto, obtenerProyectos, actualizarProyecto, eliminarProyecto } from "../proyectosService"
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view"
+import { Feather, FontAwesome5 } from "@expo/vector-icons"
+import styles from "../styles/homeStyles"
 
 export default function HomeScreen({ navigation }) {
   const [proyectos, setProyectos] = useState([])
@@ -18,6 +20,9 @@ export default function HomeScreen({ navigation }) {
     cliente: "",
     descripcion: "",
   })
+
+  // Estado para manejar errores de fecha
+  const [fechaError, setFechaError] = useState("")
 
   useEffect(() => {
     cargarProyectos()
@@ -42,8 +47,121 @@ export default function HomeScreen({ navigation }) {
     }
   }
 
+  const formatearFecha = (fecha) => {
+    if (!fecha) return ""
+    const partes = fecha.split("-")
+    if (partes.length === 3) {
+      return `${partes[2]}-${partes[1]}-${partes[0]}`
+    }
+    return fecha
+  }
+
+  // Función para validar si un año es bisiesto
+  const esBisiesto = (anio) => {
+    return (anio % 4 === 0 && anio % 100 !== 0) || anio % 400 === 0
+  }
+
+  // Función para obtener el número máximo de días en un mes
+  const diasEnMes = (mes, anio) => {
+    mes = Number.parseInt(mes)
+    anio = Number.parseInt(anio)
+
+    if (mes === 2) {
+      return esBisiesto(anio) ? 29 : 28
+    }
+
+    // Meses con 30 días: Abril (4), Junio (6), Septiembre (9) y Noviembre (11)
+    if ([4, 6, 9, 11].includes(mes)) {
+      return 30
+    }
+
+    // El resto de meses tienen 31 días
+    return 31
+  }
+
+  // Función para validar si una fecha es válida
+  const esFechaValida = (dia, mes, anio) => {
+    dia = Number.parseInt(dia)
+    mes = Number.parseInt(mes)
+    anio = Number.parseInt(anio)
+
+    // Validar rangos básicos
+    if (mes < 1 || mes > 12) {
+      setFechaError("El mes debe estar entre 1 y 12")
+      return false
+    }
+
+    const maxDias = diasEnMes(mes, anio)
+    if (dia < 1 || dia > maxDias) {
+      setFechaError(`El mes ${mes} solo tiene ${maxDias} días`)
+      return false
+    }
+
+    return true
+  }
+
+  const handleFechaInput = (text) => {
+    const cleaned = text.replace(/[^0-9]/g, "")
+    setFechaError("")
+
+    // Aplicar formato automático
+    if (cleaned.length <= 2) {
+      setNuevoProyecto({ ...nuevoProyecto, fechaFin: cleaned })
+    } else if (cleaned.length <= 4) {
+      const dia = cleaned.substring(0, 2)
+      const mes = cleaned.substring(2)
+
+      // Validar día y mes mientras se escribe
+      if (Number.parseInt(dia) > 31) {
+        setFechaError("El día no puede ser mayor a 31")
+      } else if (mes.length === 2 && Number.parseInt(mes) > 12) {
+        setFechaError("El mes no puede ser mayor a 12")
+      }
+
+      setNuevoProyecto({
+        ...nuevoProyecto,
+        fechaFin: dia + "-" + mes,
+      })
+    } else {
+      const dia = cleaned.substring(0, 2)
+      const mes = cleaned.substring(2, 4)
+      const anio = cleaned.substring(4, 8)
+
+      // Validar la fecha completa si ya se ingresaron todos los componentes
+      if (dia && mes && anio.length === 4) {
+        esFechaValida(dia, mes, anio)
+      }
+
+      setNuevoProyecto({
+        ...nuevoProyecto,
+        fechaFin: dia + "-" + mes + "-" + anio,
+      })
+    }
+  }
+
+  const esFechaMayorAHoy = (fechaStr) => {
+    if (!fechaStr.match(/^\d{2}-\d{2}-\d{4}$/)) {
+      return false
+    }
+
+    const partes = fechaStr.split("-")
+    const dia = Number.parseInt(partes[0])
+    const mes = Number.parseInt(partes[1])
+    const anio = Number.parseInt(partes[2])
+
+    // Validar que la fecha sea válida antes de compararla
+    if (!esFechaValida(dia, mes, anio)) {
+      return false
+    }
+
+    const fecha = new Date(anio, mes - 1, dia)
+    const hoy = new Date()
+    hoy.setHours(0, 0, 0, 0)
+
+    return fecha > hoy
+  }
+
   const manejarAgregarProyecto = async () => {
-    // Validate all required fields
     if (
       !nuevoProyecto.nombre.trim() ||
       !nuevoProyecto.ubicacion.trim() ||
@@ -55,11 +173,46 @@ export default function HomeScreen({ navigation }) {
       return
     }
 
+    // Validar formato de fecha
+    if (!nuevoProyecto.fechaFin.match(/^\d{2}-\d{2}-\d{4}$/)) {
+      setFechaError("El formato de fecha debe ser DD-MM-YYYY")
+      return
+    }
+
+    const partes = nuevoProyecto.fechaFin.split("-")
+    const dia = Number.parseInt(partes[0])
+    const mes = Number.parseInt(partes[1])
+    const anio = Number.parseInt(partes[2])
+
+    // Validar que la fecha sea válida
+    if (!esFechaValida(dia, mes, anio)) {
+      return // El mensaje de error ya se establece en esFechaValida
+    }
+
+    // Validar que la fecha sea mayor a hoy
+    if (!esFechaMayorAHoy(nuevoProyecto.fechaFin)) {
+      setFechaError("La fecha de finalización debe ser posterior a la fecha actual.")
+      return
+    }
+
     try {
-      // Set the current date as the start date
+      let fechaFinFormateada = nuevoProyecto.fechaFin
+      if (fechaFinFormateada.includes("-")) {
+        const partes = fechaFinFormateada.split("-")
+        if (partes.length === 3) {
+          fechaFinFormateada = `${partes[2]}-${partes[1]}-${partes[0]}`
+        }
+      }
+
+      const hoy = new Date()
+      const fechaInicioFormateada = `${hoy.getDate().toString().padStart(2, "0")}-${(hoy.getMonth() + 1).toString().padStart(2, "0")}-${hoy.getFullYear()}`
+
+      const fechaInicioDB = `${hoy.getFullYear()}-${(hoy.getMonth() + 1).toString().padStart(2, "0")}-${hoy.getDate().toString().padStart(2, "0")}`
+
       const proyectoCompleto = {
         ...nuevoProyecto,
-        fechaInicio: new Date().toISOString().split("T")[0], // Format: YYYY-MM-DD
+        fechaInicio: fechaInicioDB,
+        fechaFin: fechaFinFormateada,
       }
 
       await crearProyecto(proyectoCompleto)
@@ -73,6 +226,7 @@ export default function HomeScreen({ navigation }) {
         cliente: "",
         descripcion: "",
       })
+      setFechaError("")
       cargarProyectos()
     } catch (error) {
       alert("Error al crear el proyecto: " + error.message)
@@ -103,44 +257,72 @@ export default function HomeScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-        <Text style={styles.headerTitle}>Mis Proyectos</Text>
-        <View style={styles.header}>
-          <View style={styles.headerButtons}>
-            <TouchableOpacity style={styles.addButton} onPress={() => setModalVisible(true)}>
-              <Text style={styles.addButtonText}>+ Nuevo Proyecto</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-              <Text style={styles.logoutButtonText}>Cerrar Sesión</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+      <StatusBar backgroundColor="#1E5F74" barStyle="light-content" />
 
-        {proyectos.map((proyecto) => (
-          <View key={proyecto.id} style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.title}>{proyecto.nombre}</Text>
-              <Text
-                style={[
-                  styles.statusBadge,
-                  { backgroundColor: proyecto.estado === "Finalizado" ? "#4caf50" : "#ff9800" },
-                ]}
-              >
-                {proyecto.estado}
-              </Text>
-            </View>
-            <Text style={styles.text}>Cliente: {proyecto.cliente}</Text>
-            <Text style={styles.text}>Ubicación: {proyecto.ubicacion}</Text>
-            <View style={styles.cardActions}>
-              <TouchableOpacity
-                style={[styles.button, styles.detailsButton]}
-                onPress={() => verDetallesProyecto(proyecto)}
-              >
-                <Text style={styles.buttonText}>Ver Detalles</Text>
-              </TouchableOpacity>
-            </View>
+      <View style={styles.headerContainer}>
+        <View style={styles.headerContent}>
+          <Text style={styles.headerTitle}>Mis Proyectos</Text>
+        </View>
+      </View>
+
+      <View style={styles.addButtonContainer}>
+        <TouchableOpacity style={styles.addButton} onPress={() => setModalVisible(true)}>
+          <Feather name="plus" size={18} color="#fff" />
+          <Text style={styles.addButtonText}>Nuevo Proyecto</Text>
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
+        {proyectos.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <FontAwesome5 name="clipboard-list" size={60} color="#BBBBBB" />
+            <Text style={styles.emptyText}>No hay proyectos disponibles</Text>
+            <Text style={styles.emptySubText}>Crea tu primer proyecto usando el botón "Nuevo Proyecto"</Text>
           </View>
-        ))}
+        ) : (
+          proyectos.map((proyecto) => (
+            <TouchableOpacity
+              key={proyecto.id}
+              style={styles.card}
+              onPress={() => verDetallesProyecto(proyecto)}
+              activeOpacity={0.9}
+            >
+              <View style={styles.cardHeader}>
+                <Text style={styles.title}>{proyecto.nombre}</Text>
+                <View
+                  style={[
+                    styles.statusBadge,
+                    { backgroundColor: proyecto.estado === "Finalizado" ? "#4CAF50" : "#FF9800" },
+                  ]}
+                >
+                  <Text style={styles.statusText}>{proyecto.estado}</Text>
+                </View>
+              </View>
+
+              <View style={styles.cardContent}>
+                <View style={styles.infoRow}>
+                  <Feather name="user" size={16} color="#1E5F74" />
+                  <Text style={styles.infoText}>{proyecto.cliente}</Text>
+                </View>
+
+                <View style={styles.infoRow}>
+                  <Feather name="map-pin" size={16} color="#1E5F74" />
+                  <Text style={styles.infoText}>{proyecto.ubicacion}</Text>
+                </View>
+
+                <View style={styles.infoRow}>
+                  <Feather name="calendar" size={16} color="#1E5F74" />
+                  <Text style={styles.infoText}>Finaliza: {formatearFecha(proyecto.fechaFin)}</Text>
+                </View>
+              </View>
+
+              <View style={styles.cardFooter}>
+                <Text style={styles.viewDetailsText}>Ver detalles</Text>
+                <Feather name="chevron-right" size={18} color="#1E5F74" />
+              </View>
+            </TouchableOpacity>
+          ))
+        )}
       </ScrollView>
 
       <Modal
@@ -149,57 +331,93 @@ export default function HomeScreen({ navigation }) {
         visible={modalVisible}
         onRequestClose={() => setModalVisible(false)}
       >
-        <KeyboardAwareScrollView>
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Nuevo Proyecto</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Nombre del proyecto"
-              placeholderTextColor="#999"
-              value={nuevoProyecto.nombre}
-              onChangeText={(text) => setNuevoProyecto({ ...nuevoProyecto, nombre: text })}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Ubicación"
-              placeholderTextColor="#999"
-              value={nuevoProyecto.ubicacion}
-              onChangeText={(text) => setNuevoProyecto({ ...nuevoProyecto, ubicacion: text })}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Fecha de fin (YYYY-MM-DD)"
-              placeholderTextColor="#999"
-              value={nuevoProyecto.fechaFin}
-              onChangeText={(text) => setNuevoProyecto({ ...nuevoProyecto, fechaFin: text })}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Cliente"
-              placeholderTextColor="#999"
-              value={nuevoProyecto.cliente}
-              onChangeText={(text) => setNuevoProyecto({ ...nuevoProyecto, cliente: text })}
-            />
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              placeholder="Descripción"
-              placeholderTextColor="#999"
-              multiline
-              numberOfLines={4}
-              value={nuevoProyecto.descripcion}
-              onChangeText={(text) => setNuevoProyecto({ ...nuevoProyecto, descripcion: text })}
-            />
-            <View style={styles.modalButtons}>
-              <TouchableOpacity style={[styles.button, styles.cancelButton]} onPress={() => setModalVisible(false)}>
-                <Text style={styles.buttonText}>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.button, styles.saveButton]} onPress={manejarAgregarProyecto}>
-                <Text style={styles.buttonText}>Guardar</Text>
-              </TouchableOpacity>
+        <KeyboardAwareScrollView contentContainerStyle={styles.modalScrollContainer}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Nuevo Proyecto</Text>
+                <TouchableOpacity onPress={() => setModalVisible(false)}>
+                  <Feather name="x" size={24} color="#333" />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Nombre del proyecto</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Ej: Construcción Residencial Torres del Valle"
+                  placeholderTextColor="#999"
+                  value={nuevoProyecto.nombre}
+                  onChangeText={(text) => setNuevoProyecto({ ...nuevoProyecto, nombre: text })}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Ubicación</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Ej: Av. Principal #123, Ciudad"
+                  placeholderTextColor="#999"
+                  value={nuevoProyecto.ubicacion}
+                  onChangeText={(text) => setNuevoProyecto({ ...nuevoProyecto, ubicacion: text })}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Fecha de finalización (DD-MM-YYYY)</Text>
+                <TextInput
+                  style={[styles.input, fechaError ? styles.inputError : null]}
+                  placeholder="DD-MM-YYYY"
+                  placeholderTextColor="#999"
+                  value={nuevoProyecto.fechaFin}
+                  onChangeText={handleFechaInput}
+                  keyboardType="numeric"
+                  maxLength={10}
+                />
+                {fechaError ? (
+                  <Text style={styles.errorText}>{fechaError}</Text>
+                ) : (
+                  <Text style={styles.helperText}>La fecha debe ser posterior a hoy</Text>
+                )}
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Cliente</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Ej: Inmobiliaria Moderna S.A."
+                  placeholderTextColor="#999"
+                  value={nuevoProyecto.cliente}
+                  onChangeText={(text) => setNuevoProyecto({ ...nuevoProyecto, cliente: text })}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Descripción</Text>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  placeholder="Describe los detalles importantes del proyecto..."
+                  placeholderTextColor="#999"
+                  multiline
+                  numberOfLines={4}
+                  value={nuevoProyecto.descripcion}
+                  onChangeText={(text) => setNuevoProyecto({ ...nuevoProyecto, descripcion: text })}
+                />
+              </View>
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.cancelButton]}
+                  onPress={() => setModalVisible(false)}
+                >
+                  <Text style={styles.cancelButtonText}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.modalButton, styles.saveButton]} onPress={manejarAgregarProyecto}>
+                  <Text style={styles.saveButtonText}>Guardar Proyecto</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
         </KeyboardAwareScrollView>
       </Modal>
 
@@ -207,152 +425,3 @@ export default function HomeScreen({ navigation }) {
     </View>
   )
 }
-
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 16,
-    backgroundColor: "#FFFFFF", // Blanco como fondo principal
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#171321", // Púrpura oscuro para el título del encabezado
-    marginTop: 40,
-  },
-  headerButtons: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 15,
-  },
-  scrollContainer: {
-    paddingBottom: 100,
-  },
-  card: {
-    backgroundColor: "#F2F2F2", // Gris claro para las tarjetas
-    padding: 16,
-    marginVertical: 10,
-    borderRadius: 8,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 10,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#171321", // Púrpura oscuro para los títulos de las tarjetas
-  },
-  text: {
-    fontSize: 16,
-    color: "#333", // Gris oscuro para el texto
-    marginBottom: 8,
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 15,
-    fontSize: 12,
-    color: "#fff",
-    backgroundColor: "#171321", // Púrpura oscuro para la insignia de estado
-  },
-  cardActions: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: 10,
-    marginTop: 10,
-  },
-  button: {
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 5,
-    minWidth: 80,
-    alignItems: "center",
-  },
-  buttonText: {
-    color: "#fff",
-    fontSize: 14,
-  },
-  detailsButton: {
-    backgroundColor: "#2E2A3A", // Un tono más claro del púrpura para los botones
-  },
-  updateButton: {
-    backgroundColor: "#2E2A3A",
-  },
-  deleteButton: {
-    backgroundColor: "#2E2A3A",
-  },
-  addButton: {
-    backgroundColor: "#171321", // Púrpura oscuro para el botón de agregar
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 5,
-  },
-  addButtonText: {
-    color: "#fff",
-    fontSize: 14,
-  },
-  logoutButton: {
-    backgroundColor: "#4A4656", // Un tono aún más claro para el botón de cerrar sesión
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 5,
-  },
-  logoutButtonText: {
-    color: "#fff",
-    fontSize: 14,
-  },
-  modalContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    height: 800,
-  },
-  modalContent: {
-    backgroundColor: "#dedede", // Gris claro para el contenido modal
-    padding: 20,
-    borderRadius: 8,
-    width: "90%",
-    maxHeight: "90%",
-  },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#171321", // Púrpura oscuro para el título modal
-    marginBottom: 20,
-  },
-  input: {
-    backgroundColor: "#F5F5F5", // Gris muy claro para los inputs
-    color: "#171321", // Púrpura oscuro para el texto de los inputs
-    padding: 12,
-    borderRadius: 6,
-    marginBottom: 12,
-    fontSize: 16,
-  },
-  textArea: {
-    height: 100,
-    textAlignVertical: "top",
-  },
-  modalButtons: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: 10,
-    marginTop: 20,
-  },
-  cancelButton: {
-    backgroundColor: "#4A4656", // Un tono claro del púrpura para el botón de cancelar
-  },
-  saveButton: {
-    backgroundColor: "#171321", // Púrpura oscuro para el botón de guardar
-  },
-});
-

@@ -4,7 +4,7 @@ import { createUserWithEmailAndPassword, signInWithCredential, GoogleAuthProvide
 import * as WebBrowser from "expo-web-browser";
 import * as Google from "expo-auth-session/providers/google";
 import { auth } from "../firebaseConfig";
-
+import styles from "../styles/signUpStyles"
 WebBrowser.maybeCompleteAuthSession();
 
 export default function SignupScreen({ navigation }) {
@@ -27,7 +27,7 @@ export default function SignupScreen({ navigation }) {
       await createUserWithEmailAndPassword(auth, email, password);
       navigation.replace("UserData");
     } catch (error) {
-      console.error("Signup error:", error);
+      console.error("Error de registro:", error);
       alert("Error al registrarse: " + error.message);
     } finally {
       setLoading(false);
@@ -37,7 +37,7 @@ export default function SignupScreen({ navigation }) {
   const handleGoogleSignup = async () => {
     try {
       const result = await promptAsync();
-      if (result?.type === "success") {
+      if (result?.type === "Exito") {
         const { id_token } = result.params;
         const credential = GoogleAuthProvider.credential(id_token);
         await signInWithCredential(auth, credential);
@@ -103,68 +103,3 @@ export default function SignupScreen({ navigation }) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#FFFFFF", // Blanco como fondo principal
-    justifyContent: "center",
-  },
-  content: {
-    padding: 16,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#171321", // Púrpura oscuro para el título
-    marginBottom: 8,
-    textAlign: "center",
-  },
-  subtitle: {
-    fontSize: 16,
-    color: "#333", // Gris oscuro para el subtítulo
-    marginBottom: 32,
-    textAlign: "center",
-  },
-  input: {
-    backgroundColor: "#F2F2F2", // Gris claro para el fondo del input
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 16,
-    fontSize: 16,
-    color: "#171321", // Púrpura oscuro para el texto del input
-  },
-  button: {
-    backgroundColor: "#171321", // Púrpura oscuro para el botón principal
-    padding: 16,
-    borderRadius: 8,
-    alignItems: "center",
-    marginTop: 16,
-  },
-  buttonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "500",
-  },
-  googleButton: {
-    backgroundColor: "#e57373", // Rojo claro, para el google button
-    padding: 16,
-    borderRadius: 8,
-    alignItems: "center",
-    marginTop: 16,
-  },
-  googleButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "500",
-  },
-  linkButton: {
-    marginTop: 16,
-    alignItems: "center",
-  },
-  linkText: {
-    color: "#171321", // Púrpura oscuro para el texto del enlace
-    fontSize: 16,
-  },
-});
-

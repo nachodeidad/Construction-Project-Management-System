@@ -6,9 +6,12 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  StatusBar,
 } from 'react-native';
 import { obtenerProyectos } from '../proyectosService';
 import BottomNav from '../assets/BottomNav';
+import { Feather } from '@expo/vector-icons';
+import styles from "../styles/proyectosArchivadosStyle"
 
 export default function ProyectosArchivadosScreen({ navigation }) {
   const [proyectosPendientes, setProyectosPendientes] = useState([]);
@@ -25,7 +28,7 @@ export default function ProyectosArchivadosScreen({ navigation }) {
         obtenerProyectos("Pendiente"),
         obtenerProyectos("Finalizado")
       ]);
-      
+
       setProyectosPendientes(pendientes);
       setProyectosFinalizados(finalizados);
       setLoading(false);
@@ -33,6 +36,16 @@ export default function ProyectosArchivadosScreen({ navigation }) {
       console.error("Error al cargar proyectos:", error);
       setLoading(false);
     }
+  };
+
+  // Cambio de fecha de YYYY-MM-DD a DD-MM-YYYY
+  const formatearFecha = (fecha) => {
+    if (!fecha) return "";
+    const date = new Date(fecha);
+    const dia = date.getDate().toString().padStart(2, "0");
+    const mes = (date.getMonth() + 1).toString().padStart(2, "0");
+    const anio = date.getFullYear();
+    return `${dia}-${mes}-${anio}`;
   };
 
   const ProyectoCard = ({ proyecto }) => (
@@ -44,39 +57,62 @@ export default function ProyectosArchivadosScreen({ navigation }) {
         <Text style={styles.proyectoNombre}>{proyecto.nombre}</Text>
         <View style={[
           styles.estadoBadge,
-          { backgroundColor: proyecto.estado === "Finalizado" ? "#4CAF50" : "#FFA000" }
+          { backgroundColor: proyecto.estado === "Finalizado" ? "#4CAF50" : "#FF9800" }
         ]}>
           <Text style={styles.estadoTexto}>{proyecto.estado}</Text>
         </View>
       </View>
       <Text style={styles.proyectoDescripcion}>{proyecto.descripcion}</Text>
       <View style={styles.proyectoFooter}>
-        <Text style={styles.proyectoFecha}>
-          {proyecto.estado === "Finalizado" 
-            ? `Finalizado: ${new Date(proyecto.fechaFinalizacion).toLocaleDateString()}`
-            : `Creado: ${new Date(proyecto.fechaCreacion).toLocaleDateString()}`
-          }
-        </Text>
+        <View style={styles.footerItem}>
+          <Feather name="calendar" size={16} color="#1E5F74" />
+          <Text style={styles.proyectoFecha}>
+            {proyecto.estado === "Finalizado"
+              ? `Finalizado: ${formatearFecha(proyecto.fechaFinalizacion)}`
+              : `Creado: ${formatearFecha(proyecto.fechaCreacion)}`
+            }
+          </Text>
+        </View>
+        {proyecto.cliente && (
+          <View style={styles.footerItem}>
+            <Feather name="user" size={16} color="#1E5F74" />
+            <Text style={styles.proyectoCliente}>{proyecto.cliente}</Text>
+          </View>
+        )}
       </View>
     </TouchableOpacity>
   );
 
-  
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#1E5F74" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      <View>
+      <StatusBar backgroundColor="#1E5F74" barStyle="light-content" />
+
+      <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
+          <Feather name="arrow-left" size={24} color="#fff" />
+          <Text style={styles.backButtonText}>Volver</Text>
         </TouchableOpacity>
+        <Text style={styles.headerTitle}>Proyectos Archivados</Text>
       </View>
-      <Text style={styles.headerTitle}>Proyectos Archivados</Text>
+
       <ScrollView style={styles.content}>
         {proyectosPendientes.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Proyectos Pendientes</Text>
+            <View style={styles.sectionTitleContainer}>
+              <Feather name="clock" size={20} color="#1E5F74" />
+              <Text style={styles.sectionTitle}>Proyectos Pendientes</Text>
+            </View>
             {proyectosPendientes.map((proyecto) => (
               <ProyectoCard key={proyecto.id} proyecto={proyecto} />
             ))}
@@ -85,7 +121,8 @@ export default function ProyectosArchivadosScreen({ navigation }) {
 
         {proyectosFinalizados.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Proyectos Finalizados</Text>
+            <View style={styles.sectionTitleContainer}>
+            </View>
             {proyectosFinalizados.map((proyecto) => (
               <ProyectoCard key={proyecto.id} proyecto={proyecto} />
             ))}
@@ -94,109 +131,12 @@ export default function ProyectosArchivadosScreen({ navigation }) {
 
         {proyectosPendientes.length === 0 && proyectosFinalizados.length === 0 && (
           <View style={styles.emptyState}>
+            <Feather name="folder" size={50} color="#BBBBBB" />
             <Text style={styles.emptyStateText}>No hay proyectos archivados</Text>
           </View>
         )}
       </ScrollView>
-      <BottomNav/>
+      <BottomNav />
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF', // Blanco como fondo principal
-  },
-  header: {
-    padding: 16,
-    paddingTop: 60,
-    backgroundColor: '#F2F2F2', // Gris claro para el encabezado
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#171321', // Púrpura oscuro para el título del encabezado
-    marginTop: 50,
-    paddingLeft: 20,
-  },
-  backButton: {
-    marginBottom: 10,
-  },
-  backButtonText: {
-    color: '#171321', // Púrpura oscuro para el texto del botón de retroceso
-    fontSize: 16,
-  },
-  content: {
-    flex: 1,
-    padding: 16,
-  },
-  section: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#171321', // Púrpura oscuro para el título de la sección
-    marginBottom: 16,
-  },
-  proyectoCard: {
-    backgroundColor: '#F2F2F2', // Gris claro para las tarjetas de proyecto
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  proyectoNombre: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#171321', // Púrpura oscuro para el nombre del proyecto
-    flex: 1,
-    marginRight: 8,
-  },
-  estadoBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  estadoTexto: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  proyectoDescripcion: {
-    color: '#333', // Gris oscuro para la descripción del proyecto
-    fontSize: 14,
-    marginBottom: 12,
-  },
-  proyectoFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  proyectoFecha: {
-    color: '#666', // Gris medio para la fecha del proyecto
-    fontSize: 12,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF', // Blanco para el contenedor de carga
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 32,
-  },
-  emptyStateText: {
-    color: '#666', // Gris medio para el texto de estado vacío
-    fontSize: 16,
-  },
-});
